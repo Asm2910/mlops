@@ -1,0 +1,66 @@
+schema: '2.0'
+stages:
+  data_collection:
+    cmd: python src/data_collection.py
+    deps:
+    - path: src/data_collection.py
+      hash: md5
+      md5: d4391ce3aa8a6b81ea114bb19ca5c233
+      size: 2649
+    outs:
+    - path: data/raw
+      hash: md5
+      md5: c0c2d65c14a603e91e029fda3c344a5c.dir
+      size: 522262
+      nfiles: 2
+  pre_processing:
+    cmd: python src/data_prep.py
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: c0c2d65c14a603e91e029fda3c344a5c.dir
+      size: 522262
+      nfiles: 2
+    - path: src/data_prep.py
+      hash: md5
+      md5: 200f390c92a3594a13f409910c918692
+      size: 2319
+    outs:
+    - path: data/processed_data
+      hash: md5
+      md5: e34c84b2d0f2a75442271cd6c5779b7c.dir
+      size: 546895
+      nfiles: 2
+  model_building:
+    cmd: python src/model_building.py
+    deps:
+    - path: data/processed_data
+      hash: md5
+      md5: e34c84b2d0f2a75442271cd6c5779b7c.dir
+      size: 546895
+      nfiles: 2
+    - path: src/model_building.py
+      hash: md5
+      md5: d1c75a13eb0677b60f1b0d8ca3678552
+      size: 3217
+    outs:
+    - path: models/model_rf_v1.pkl
+      hash: md5
+      md5: 64870ad1b432598b476d75094d89b836
+      size: 7344948
+  model_eval:
+    cmd: python src/model_eval.py
+    deps:
+    - path: models/model_rf_v1.pkl
+      hash: md5
+      md5: 64870ad1b432598b476d75094d89b836
+      size: 7344948
+    - path: src/model_eval.py
+      hash: md5
+      md5: 8911eb6f7c7493a7b6332c48c3099bcb
+      size: 3364
+    outs:
+    - path: metrics.json
+      hash: md5
+      md5: c5789a943f546360ca703f7c9472a153
+      size: 150
