@@ -63,48 +63,46 @@ with mlflow.start_run(run_name="Random Forest Tuning") as parent_run:
     best_rf = random_search.best_estimator_
     best_rf.fit(x_train, y_train)
 
-    # Save the trained model to a file for later use
+    
     pickle.dump(best_rf, open("model.pkl", "wb"))
 
-    # Prepare the test data by separating features and target variable
-    X_test = test_processed_data.drop(columns=["Potability"], axis=1)  # Features
-    y_test = test_processed_data["Potability"]  # Target variable
+    
+    X_test = test_processed_data.drop(columns=["Potability"], axis=1)  
+    y_test = test_processed_data["Potability"]  
 
-    # Load the saved model from the file
+    
     model = pickle.load(open('model.pkl', "rb"))
 
-    # Make predictions on the test set using the loaded model
+    
     y_pred = model.predict(X_test)
 
-    # Calculate and print performance metrics: accuracy, precision, recall, and F1-score
+    
     acc = accuracy_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred)
     recall = recall_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
 
-    # Log performance metrics into MLflow for tracking
+    
     mlflow.log_metric("accuracy", acc)
     mlflow.log_metric("precision", precision)
     mlflow.log_metric("recall", recall)
     mlflow.log_metric("f1 score", f1)
 
-    # Log the training and testing data as inputs in MLflow
+    
     train_df = mlflow.data.from_pandas(train_processed_data)
     test_df = mlflow.data.from_pandas(test_processed_data)
     
-    mlflow.log_input(train_df, "train")  # Log training data
-    mlflow.log_input(test_df, "test")  # Log test data
+    mlflow.log_input(train_df, "train")  
+    mlflow.log_input(test_df, "test")  
 
-    # Log the current script file as an artifact in MLflow
     mlflow.log_artifact(__file__)
 
-    # Infer the model signature using the test features and predictions
+
     sign = infer_signature(X_test, random_search.best_estimator_.predict(X_test))
     
-    # Log the trained model in MLflow with its signature
+
     mlflow.sklearn.log_model(random_search.best_estimator_, "Best Model", signature=sign)
 
-    # Print the calculated performance metrics to the console for review
     print("Accuracy: ", acc)
     print("Precision: ", precision)
     print("Recall: ", recall)

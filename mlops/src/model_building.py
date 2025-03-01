@@ -93,6 +93,6 @@ if __name__ == "__main__":
     trainer = ModelTrainer(
         params_path = r"F:\ml_ques_recommender\mlops\params.yaml",
         data_path = r"F:\ml_ques_recommender\mlops\data\processed_data\train_processed.csv",
-        model_path = r"F:\ml_ques_recommender\mlops\models\model_rf_v1.pkl"
+        model_path = r"F:\ml_ques_recommender\mlops\models\model.pkl"
     )
     trainer.run()

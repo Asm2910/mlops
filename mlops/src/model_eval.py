@@ -2,94 +2,133 @@ import numpy as np
 import pandas as pd
 import pickle
 import json
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import mlflow
+import yaml
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from mlflow import log_metric, log_param, log_artifact
+import mlflow.sklearn
+import dagshub
+import mlflow
+from mlflow.models import infer_signature
 
-class ModelEvaluator:
-    def __init__(self, test_data_path: str, model_path: str, metrics_output_path: str = "metrics.json"):
-        self.test_data_path = test_data_path
-        self.model_path = model_path
-        self.metrics_output_path = metrics_output_path
-        self.model = None
-        self.x_test = None
-        self.y_test = None
+class MLflowPipeline:
+    def __init__(self, repo_owner, repo_name, experiment_name, tracking_uri):
+        self.repo_owner = repo_owner
+        self.repo_name = repo_name
+        self.experiment_name = experiment_name
+        self.tracking_uri = tracking_uri
+        self._initialize_mlflow()
+    
+    def _initialize_mlflow(self):
+        dagshub.init(repo_owner=self.repo_owner, repo_name=self.repo_name, mlflow=True)
+        mlflow.set_experiment(self.experiment_name)
+        mlflow.set_tracking_uri(self.tracking_uri)
 
-    def load_data(self) -> None:
-        """
-        Load test data from a CSV file.
-
-        """
+    @staticmethod
+    def load_data(filepath: str) -> pd.DataFrame:
         try:
-            print("Loading test data...")
-            test_data = pd.read_csv(self.test_data_path)
-            self.x_test = test_data.iloc[:, :-1].values
-            self.y_test = test_data.iloc[:, -1].values
+            return pd.read_csv(filepath)
         except Exception as e:
-            raise Exception(f"Error loading test data from {self.test_data_path}: {e}")
+            raise Exception(f"Error loading data from {filepath}: {e}")
 
-    def load_model(self) -> None:
-        """
-        Load the trained model from a pickle file.
-
-        """
+    @staticmethod
+    def prepare_data(data: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
         try:
-            print("Loading trained model...")
-            with open(self.model_path, "rb") as file:
-                self.model = pickle.load(file)
+            X = data.drop(columns=['Potability'], axis=1)
+            y = data['Potability']
+            return X, y
         except Exception as e:
-            raise Exception(f"Error loading model from {self.model_path}: {e}")
+            raise Exception(f"Error preparing data: {e}")
 
-    def evaluate_model(self) -> dict:
-        """
-        Evaluate the model and return the computed metrics.
-
-        """
+    @staticmethod
+    def load_model(filepath: str):
         try:
-            if self.model is None or self.x_test is None or self.y_test is None:
-                raise Exception("Model or test data is not loaded properly.")
+            with open(filepath, "rb") as file:
+                return pickle.load(file)
+        except Exception as e:
+            raise Exception(f"Error loading model from {filepath}: {e}")
 
-            print("Predicting on test data...")
-            y_pred = self.model.predict(self.x_test)
+    def evaluate_model(self, model, X_test: pd.DataFrame, y_test: pd.Series, model_name: str) -> dict:
+        try:
+            params = yaml.safe_load(open("params.yaml", "r"))
+            test_size = params["data_collection"]["test_size"]
+            n_estimators = params["model_building"]["n_estimators"]
+            
+            y_pred = model.predict(X_test)
 
-            print("Calculating metrics...")
+            # Calculate metrics
             metrics = {
-                "accuracy": accuracy_score(self.y_test, y_pred),
-                "precision": precision_score(self.y_test, y_pred),
-                "recall": recall_score(self.y_test, y_pred),
-                "f1_score": f1_score(self.y_test, y_pred)
+                'accuracy': accuracy_score(y_test, y_pred),
+                'precision': precision_score(y_test, y_pred),
+                'recall': recall_score(y_test, y_pred),
+                'f1_score': f1_score(y_test, y_pred)
             }
+            
+            mlflow.log_param("Test_size", test_size)
+            mlflow.log_param("n_estimators", n_estimators) 
+            
+            for key, value in metrics.items():
+                mlflow.log_metric(key, value)
+            
+            # Confusion matrix
+            cm = confusion_matrix(y_test, y_pred)
+            plt.figure(figsize=(5, 5))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+            plt.xlabel("Predicted")
+            plt.ylabel("Actual")
+            plt.title(f"Confusion Matrix for {model_name}")
+            cm_path = f"confusion_matrix_{model_name.replace(' ', '_')}.png"
+            plt.savefig(cm_path)
+            mlflow.log_artifact(cm_path)
+            
             return metrics
         except Exception as e:
-            raise Exception(f"Error during model evaluation: {e}")
+            raise Exception(f"Error evaluating model: {e}")
 
-    def save_metrics(self, metrics: dict) -> None:
-        """
-        Save evaluation metrics to a JSON file.
-
-        """
+    @staticmethod
+    def save_metrics(metrics: dict, metrics_path: str) -> None:
         try:
-            print(f"Saving metrics to {self.metrics_output_path}...")
-            with open(self.metrics_output_path, "w") as file:
+            with open(metrics_path, 'w') as file:
                 json.dump(metrics, file, indent=4)
         except Exception as e:
-            raise Exception(f"Error saving metrics to {self.metrics_output_path}: {e}")
+            raise Exception(f"Error saving metrics to {metrics_path}: {e}")
 
-    def run(self) -> None:
-        """
-        Execute the complete evaluation pipeline.
-
-        """
+    def run_pipeline(self, test_data_path, model_path, metrics_path, model_name):
         try:
-            self.load_data()
-            self.load_model()
-            metrics = self.evaluate_model()
-            self.save_metrics(metrics)
-            print("Model evaluation completed successfully!")
+            test_data = self.load_data(test_data_path)
+            X_test, y_test = self.prepare_data(test_data)
+            model = self.load_model(model_path)
+
+            with mlflow.start_run() as run:
+                metrics = self.evaluate_model(model, X_test, y_test, model_name)
+                self.save_metrics(metrics, metrics_path)
+                
+                mlflow.log_artifact(model_path)
+                mlflow.log_artifact(metrics_path)
+                
+                signature = infer_signature(X_test, model.predict(X_test))
+                mlflow.sklearn.log_model(model, "Best Model", signature=signature)
+                
+                run_info = {'run_id': run.info.run_id, 'model_name': "Best Model"}
+                reports_path = "reports/run_info.json"
+                with open(reports_path, 'w') as file:
+                    json.dump(run_info, file, indent=4)
         except Exception as e:
-            print(f"An error occurred: {e}")
+            raise Exception(f"An error occurred during the pipeline run: {e}")
 
 if __name__ == "__main__":
-    evaluator = ModelEvaluator(
-        test_data_path = r"F:\ml_ques_recommender\mlops\data\processed_data\test_processed.csv",
-        model_path = r"F:\ml_ques_recommender\mlops\models\model_rf_v1.pkl"
+    pipeline = MLflowPipeline(
+        repo_owner='ASM2910',
+        repo_name='mlops',
+        experiment_name='DVC_PIPELINE',
+        tracking_uri='https://dagshub.com/Asm2910/mlops.mlflow'
     )
-    evaluator.run()
+    pipeline.run_pipeline(
+        test_data_path = r"F:\ml_ques_recommender\mlops\data\processed_data\test_processed.csv",
+        model_path = r"F:\ml_ques_recommender\mlops\models\model.pkl",
+        metrics_path = "reports/metrics.json",
+        model_name = "Best Model"
+    )
+
