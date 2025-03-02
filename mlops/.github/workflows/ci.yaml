@@ -26,6 +26,5 @@ jobs:
 
       - name: Run DVC pipeline
         run:
-        # Directly run the pipeline without pulling
           dvc repro
 
