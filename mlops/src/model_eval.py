@@ -122,7 +122,7 @@ if __name__ == "__main__":
     pipeline = MLflowPipeline(
         repo_owner='ASM2910',
         repo_name='mlops',
-        experiment_name='DVC_PIPELINE',
+        experiment_name='DVC_PIPELINE_1',
         tracking_uri='https://dagshub.com/Asm2910/mlops.mlflow'
     )
     pipeline.run_pipeline(

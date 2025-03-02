@@ -21,7 +21,6 @@ stages:
     - src/model_building.py
     params:
     - model_building.n_estimators
-    - model_building.max_depth
     outs:
     - models/model.pkl
   model_eval:
@@ -32,9 +31,9 @@ stages:
     metrics:
     - reports/metrics.json
     outs:
-    - reports/run_info.json 
+    - reports/run_info.json
 
-  
+
   model_registration:
     cmd: python src/model_reg.py
     deps:
